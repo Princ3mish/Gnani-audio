@@ -1,4 +1,6 @@
+import urllib.parse
 from pathlib import Path
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -19,8 +21,22 @@ class Settings(BaseSettings):
     RETRY_BACKOFF_MAX: int = 300
     FRONTEND_URL: str = "http://localhost:5173"
 
-
-
+    @field_validator("DATABASE_URL", mode="after")
+    @classmethod
+    def sanitize_database_url(cls, v: str) -> str:
+        if not v:
+            return v
+        if v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql://", 1)
+        prefix, _, rest = v.partition("://")
+        if rest and "@" in rest:
+            userinfo, _, hostpath = rest.rpartition("@")
+            if ":" in userinfo:
+                user, _, password = userinfo.partition(":")
+                password = urllib.parse.unquote(password)
+                password = urllib.parse.quote(password, safe="*")
+                v = f"{prefix}://{user}:{password}@{hostpath}"
+        return v
 
     model_config = SettingsConfigDict(
         env_file=[BASE_DIR / ".env", ".env"],

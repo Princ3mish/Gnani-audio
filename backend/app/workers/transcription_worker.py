@@ -27,7 +27,7 @@ from app.services.gnani_service import (
     retry_backoff_max=settings.RETRY_BACKOFF_MAX,
     retry_kwargs={"max_retries": settings.MAX_RETRIES},
 )
-def transcribe_audio_task(self, note_id: str, chunk_threshold_seconds: int = 25) -> None:
+def transcribe_audio_task(self, note_id: str) -> None:
     db = SessionLocal()
     storage_service = StorageService()
     gnani_service = GnaniService()
@@ -68,9 +68,10 @@ def transcribe_audio_task(self, note_id: str, chunk_threshold_seconds: int = 25)
         storage_service.download_file(note.storage_key, temp_path)
 
         # Check if audio file requires chunking
-        if AudioChunkingService.needs_chunking(note.duration_seconds, threshold_seconds=chunk_threshold_seconds):
-            print(f"Audio duration ({note.duration_seconds}s) exceeds threshold ({chunk_threshold_seconds}s). Splitting into chunks...")
-            chunk_paths = AudioChunkingService.split_audio(temp_path, chunk_seconds=15, overlap_seconds=2)
+        if AudioChunkingService.needs_chunking(note.duration_seconds):
+            print(f"Audio duration ({note.duration_seconds}s) exceeds threshold. Splitting into chunks...")
+            chunk_paths = AudioChunkingService.split_audio(temp_path, chunk_seconds=300, overlap_seconds=2)
+
 
 
             

@@ -7,7 +7,7 @@ from pydub import AudioSegment
 
 class AudioChunkingService:
     @classmethod
-    def needs_chunking(cls, duration_seconds: float | None, threshold_seconds: int = 25) -> bool:
+    def needs_chunking(cls, duration_seconds: float | None, threshold_seconds: int = 600) -> bool:
         if duration_seconds is None or duration_seconds <= 0:
             return False
         return duration_seconds > threshold_seconds
@@ -16,9 +16,10 @@ class AudioChunkingService:
     def split_audio(
         cls,
         file_path: str,
-        chunk_seconds: int = 15,
+        chunk_seconds: int = 300,
         overlap_seconds: int = 2,
     ) -> list[str]:
+
 
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Audio file not found: {file_path}")

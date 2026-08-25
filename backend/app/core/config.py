@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     GNANI_BASE_URL: str
     LLM_API_KEY: str
     LLM_MODEL: str
+    LLM_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
+
 
     model_config = SettingsConfigDict(
         env_file=[BASE_DIR / ".env", ".env"],

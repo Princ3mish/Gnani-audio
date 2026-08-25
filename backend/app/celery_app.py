@@ -15,5 +15,7 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     imports=[
         "app.workers.transcription_worker",
+        "app.workers.summarization_worker",
     ],
+
 )

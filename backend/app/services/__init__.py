@@ -9,6 +9,15 @@ from app.services.gnani_service import (
     GnaniBadRequestError,
     normalize_gnani_error,
 )
+from app.services.summarization_service import (
+    SummarizationService,
+    SummarizationError,
+    LLMTimeoutError,
+    LLMAuthError,
+    LLMServerError,
+    LLMInvalidResponseError,
+    normalize_summarization_error,
+)
 
 __all__ = [
     "AudioValidationService",
@@ -21,4 +30,11 @@ __all__ = [
     "GnaniServerError",
     "GnaniBadRequestError",
     "normalize_gnani_error",
+    "SummarizationService",
+    "SummarizationError",
+    "LLMTimeoutError",
+    "LLMAuthError",
+    "LLMServerError",
+    "LLMInvalidResponseError",
+    "normalize_summarization_error",
 ]

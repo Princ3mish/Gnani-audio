@@ -20,13 +20,16 @@ class StorageService:
             endpoint_url=settings.STORAGE_ENDPOINT,
             aws_access_key_id=settings.STORAGE_ACCESS_KEY,
             aws_secret_access_key=settings.STORAGE_SECRET_KEY,
+            region_name="us-east-1",
             config=Config(
                 signature_version="s3v4",
-                connect_timeout=2,
-                read_timeout=5,
-                retries={"max_attempts": 1},
+                s3={"addressing_style": "path"},
+                connect_timeout=5,
+                read_timeout=10,
+                retries={"max_attempts": 2},
             ),
         )
+
         LOCAL_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
     def generate_unique_storage_key(self, original_filename: str) -> str:

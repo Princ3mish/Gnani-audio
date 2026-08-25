@@ -48,16 +48,21 @@ def custom_rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded)
     )
 
 
+cors_origins = ["http://localhost:5173"]
+if settings.FRONTEND_URL and settings.FRONTEND_URL not in cors_origins:
+    cors_origins.append(settings.FRONTEND_URL)
+
 # Configure Middleware
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(LimitUploadSizeMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 app.include_router(notes_router, prefix="/api")
 

@@ -97,6 +97,15 @@ def custom_rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded)
     )
 
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled server exception on {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"error_code": "INTERNAL_SERVER_ERROR", "message": str(exc)},
+    )
+
+
 cors_origins = ["http://localhost:5173"]
 if settings.FRONTEND_URL and settings.FRONTEND_URL not in cors_origins:
     cors_origins.append(settings.FRONTEND_URL)
@@ -118,4 +127,18 @@ app.include_router(notes_router, prefix="/api")
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok"}
+    db_status = "ok"
+    try:
+        from sqlalchemy import text
+        from app.db.session import engine
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+
+    return {
+        "status": "ok",
+        "database": db_status,
+        "worker_thread_alive": _celery_worker_thread.is_alive() if _celery_worker_thread else False,
+    }
+

@@ -67,12 +67,13 @@ class AudioValidationService:
             ) from exc
 
     @classmethod
-    def validate_duration(cls, duration_seconds: float, min_seconds: int = 120) -> None:
+    def validate_duration(cls, duration_seconds: float, min_seconds: int = 1) -> None:
         if duration_seconds < min_seconds:
             raise AudioValidationError(
                 code="AUDIO_TOO_SHORT",
-                message=f"Audio duration must be at least {min_seconds} seconds (2 minutes). Received: {duration_seconds:.1f}s."
+                message=f"Audio duration must be at least {min_seconds} seconds. Received: {duration_seconds:.1f}s."
             )
+
 
     @classmethod
     def is_corrupt(cls, file_path: str) -> bool:

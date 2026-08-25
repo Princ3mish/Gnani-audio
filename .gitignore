@@ -3,3 +3,5 @@ node_modules/
 .env
 dist/
 __pycache__/
+*.mp3
+storage_data/

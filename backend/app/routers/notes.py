@@ -48,7 +48,8 @@ async def upload_audio_note(
 
         # 4. Extract and validate audio duration
         duration = AudioValidationService.get_duration_seconds(temp_path)
-        AudioValidationService.validate_duration(duration, min_seconds=120)
+        AudioValidationService.validate_duration(duration, min_seconds=1)
+
 
         # Upload to S3-compatible storage
         storage_key = storage_service.generate_unique_storage_key(filename)

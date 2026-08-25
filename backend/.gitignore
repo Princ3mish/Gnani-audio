@@ -2,3 +2,5 @@
 __pycache__/
 *.pyc
 .venv/
+storage_data/
+test.mp3

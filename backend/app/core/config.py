@@ -50,6 +50,13 @@ class Settings(BaseSettings):
                 v = f"{prefix}://{user}:{password}@{hostpath}"
         return v
 
+    @field_validator("FRONTEND_URL", mode="after")
+    @classmethod
+    def sanitize_frontend_url(cls, v: str) -> str:
+        if v:
+            return v.strip().rstrip("/")
+        return v
+
     model_config = SettingsConfigDict(
         env_file=[BASE_DIR / ".env", ".env"],
         env_file_encoding="utf-8",

@@ -6,7 +6,7 @@ from app.db.session import SessionLocal
 from app.models.audio_note import AudioNote, NoteStatus
 from app.models.processing_job import ProcessingJob, JobType, JobStatus
 from app.workers.transcription_worker import transcribe_audio_task
-from app.celery_app import celery_app
+from app.workers.summarization_worker import summarize_transcript_task
 
 
 class InvalidStateError(Exception):
@@ -69,26 +69,30 @@ class QueueService:
             should_close = True
 
         try:
-            if cls._has_active_job(uuid_obj, JobType.SUMMARIZE_TRANSCRIPT, db):
-                raise DuplicateJobError(f"An active summarization job already exists for note {uuid_obj}.")
-
-            job = ProcessingJob(
-                note_id=uuid_obj,
-                type=JobType.SUMMARIZE_TRANSCRIPT,
-                status=JobStatus.QUEUED,
-                attempts=0,
+            active_job = (
+                db.query(ProcessingJob)
+                .filter(
+                    ProcessingJob.note_id == uuid_obj,
+                    ProcessingJob.type == JobType.SUMMARIZE_TRANSCRIPT,
+                    ProcessingJob.status.in_([JobStatus.QUEUED, JobStatus.PROCESSING]),
+                )
+                .first()
             )
-            db.add(job)
-            db.commit()
+            if not active_job:
+                job = ProcessingJob(
+                    note_id=uuid_obj,
+                    type=JobType.SUMMARIZE_TRANSCRIPT,
+                    status=JobStatus.QUEUED,
+                    attempts=0,
+                )
+                db.add(job)
+                db.commit()
         finally:
             if should_close:
                 db.close()
 
         # Dispatch summarization task
-        celery_app.send_task(
-            "app.workers.summarization_worker.summarize_transcript_task",
-            args=[str(uuid_obj)],
-        )
+        summarize_transcript_task.delay(str(uuid_obj))
 
     @classmethod
     def retry_transcription(cls, note_id: str | UUID, db: Optional[Session] = None) -> None:
@@ -172,8 +176,5 @@ class QueueService:
                 db.close()
 
         # Dispatch Celery summarization task
-        celery_app.send_task(
-            "app.workers.summarization_worker.summarize_transcript_task",
-            args=[str(uuid_obj)],
-        )
+        summarize_transcript_task.delay(str(uuid_obj))
 

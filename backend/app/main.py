@@ -106,9 +106,23 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-cors_origins = ["http://localhost:5173"]
-if settings.FRONTEND_URL and settings.FRONTEND_URL not in cors_origins:
-    cors_origins.append(settings.FRONTEND_URL)
+def _get_cors_origins() -> list[str]:
+    origins = {
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+    }
+    if settings.FRONTEND_URL:
+        for u in settings.FRONTEND_URL.split(","):
+            u_clean = u.strip().rstrip("/")
+            if u_clean:
+                origins.add(u_clean)
+    return sorted(list(origins))
+
+
+cors_origins = _get_cors_origins()
+logger.info(f"Configured CORS origins: {cors_origins}")
 
 # Configure Middleware
 app.add_middleware(SlowAPIMiddleware)
@@ -116,6 +130,7 @@ app.add_middleware(LimitUploadSizeMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex=r"^https://.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -140,5 +155,8 @@ def health_check():
         "status": "ok",
         "database": db_status,
         "worker_thread_alive": _celery_worker_thread.is_alive() if _celery_worker_thread else False,
+        "frontend_url": settings.FRONTEND_URL,
+        "cors_origins": cors_origins,
     }
+
 

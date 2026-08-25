@@ -67,10 +67,10 @@ def transcribe_audio_task(self, note_id: str) -> None:
 
         storage_service.download_file(note.storage_key, temp_path)
 
-        # Check if audio file requires chunking
-        if AudioChunkingService.needs_chunking(note.duration_seconds):
-            print(f"Audio duration ({note.duration_seconds}s) exceeds threshold. Splitting into chunks...")
-            chunk_paths = AudioChunkingService.split_audio(temp_path, chunk_seconds=300, overlap_seconds=2)
+        # Check if audio file requires chunking (Gnani max duration is 30s, using 25s threshold with safety margin)
+        if AudioChunkingService.needs_chunking(note.duration_seconds, threshold_seconds=25):
+            print(f"Audio duration ({note.duration_seconds}s) exceeds 25s threshold. Splitting into chunks...")
+            chunk_paths = AudioChunkingService.split_audio(temp_path, chunk_seconds=25, overlap_seconds=2)
 
 
 

@@ -1,3 +1,7 @@
+import os
+import threading
+import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -10,8 +14,53 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.routers import notes_router
+from app.celery_app import celery_app
 
-app = FastAPI(title="Audio Notes Platform API")
+logger = logging.getLogger(__name__)
+
+# Force WEB_CONCURRENCY to 1 if set higher on free-tier deployments to avoid duplicate worker processes
+if int(os.environ.get("WEB_CONCURRENCY", "1")) > 1:
+    os.environ["WEB_CONCURRENCY"] = "1"
+
+_celery_worker_thread = None
+_celery_worker_lock = threading.Lock()
+_celery_worker_started = False
+
+
+def _start_celery_worker():
+    try:
+        logger.info("Starting in-process Celery worker thread...")
+        celery_app.worker_main(
+            argv=[
+                "worker",
+                "--loglevel=info",
+                "--pool=solo",
+                "--without-heartbeat",
+                "--without-gossip",
+                "--without-mingle",
+            ]
+        )
+    except Exception as e:
+        logger.error(f"In-process Celery worker encountered an error: {e}", exc_info=True)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _celery_worker_thread, _celery_worker_started
+    with _celery_worker_lock:
+        if not _celery_worker_started:
+            _celery_worker_thread = threading.Thread(
+                target=_start_celery_worker,
+                name="celery-inprocess-worker",
+                daemon=True,
+            )
+            _celery_worker_thread.start()
+            _celery_worker_started = True
+            logger.info("Celery in-process background worker thread initialized.")
+    yield
+
+
+app = FastAPI(title="Audio Notes Platform API", lifespan=lifespan)
 app.state.limiter = limiter
 
 MAX_BODY_SIZE = 110 * 1024 * 1024  # 110 MB limit (allows 100MB audio file + multipart metadata)

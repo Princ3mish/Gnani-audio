@@ -17,12 +17,14 @@ An asynchronous audio processing platform designed for uploading, transcribing, 
 
 ## Deployment Configuration & Environment Variables
 
-### 1. Railway Services (Backend API & Celery Worker)
+### 1. Single Service Deployment (Render Free-Tier / Unified Web Service)
 
-Deploy two separate services in Railway attached to the `backend/` directory:
+> [!NOTE]
+> **Free-Tier Architectural Trade-Off**: Free-tier cloud providers (e.g., Render) offer only a single free web service instance without a complimentary separate background worker service. To accommodate this, FastAPI is configured on startup to spawn an in-process daemon thread running the Celery worker (`--pool=solo`). This allows both the REST API and Celery queue processing to execute concurrently within a single container/process without blocking API startup or clean teardowns.
+>
+> In a scaled production environment with dedicated worker nodes, the worker would instead be run as a separately scaled process/service using the standalone command (`celery -A app.celery_app worker --loglevel=info`).
 
-#### **Service A: FastAPI API Service**
-- **Buildpack**: Nixpacks (automatically reads [`backend/nixpacks.toml`](file:///c:/Users/brixx/.gemini/antigravity-ide/scratch/audio-notes-platform/backend/nixpacks.toml) to install `ffmpeg`).
+- **Buildpack / Runtime**: Python 3.11+ (or Docker / Nixpacks with `ffmpeg` installed).
 - **Start Command**:
   ```bash
   uvicorn app.main:app --host 0.0.0.0 --port $PORT
@@ -30,7 +32,7 @@ Deploy two separate services in Railway attached to the `backend/` directory:
 - **Environment Variables**:
   ```env
   DATABASE_URL=postgresql://postgres:Gnani%402027*@db.qirivuvrdmqycjpqcqlm.supabase.co:5432/postgres
-  REDIS_URL=rediss://<your-railway-redis-connection-url>:6379/0
+  REDIS_URL=rediss://<your-redis-connection-url>:6379/0
   STORAGE_ENDPOINT=https://qirivuvrdmqycjpqcqlm.storage.supabase.co/storage/v1/s3
   STORAGE_ACCESS_KEY=a453ea41873f5072e0ed0afd7f7dd845
   STORAGE_SECRET_KEY=96380235e69f6d317950a3c25fb91ab9d563183ef9ccb10d0bbf1c3983c62979
@@ -40,16 +42,27 @@ Deploy two separate services in Railway attached to the `backend/` directory:
   LLM_API_KEY=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
   LLM_MODEL=meta/llama-3.3-70b-instruct
   LLM_BASE_URL=https://integrate.api.nvidia.com/v1
-  FRONTEND_URL=https://<your-vercel-app-name>.vercel.app
+  FRONTEND_URL=https://<your-frontend-deployment-url>.vercel.app
   ```
 
-#### **Service B: Celery Worker Service**
-- **Buildpack**: Nixpacks.
+---
+
+### 2. Multi-Service Production Deployment (Separate API & Worker)
+
+For multi-service hosting platforms (e.g. Railway, AWS ECS, Kubernetes), the API and worker can run as independent, individually scalable services:
+
+#### **Service A: FastAPI API Service**
+- **Start Command**:
+  ```bash
+  uvicorn app.main:app --host 0.0.0.0 --port $PORT
+  ```
+
+#### **Service B: Standalone Celery Worker Service**
 - **Start Command**:
   ```bash
   celery -A app.celery_app worker --loglevel=info
   ```
-- **Environment Variables**: Same as Service A (requires `DATABASE_URL`, `REDIS_URL`, `STORAGE_*`, `GNANI_*`, and `LLM_*`).
+- **Environment Variables**: Same as Service A.
 
 ---
 

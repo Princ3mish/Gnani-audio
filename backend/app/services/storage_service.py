@@ -30,12 +30,24 @@ class StorageService:
         LOCAL_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
     def generate_unique_storage_key(self, original_filename: str) -> str:
-        basename = os.path.basename(original_filename)
+        if not original_filename or not isinstance(original_filename, str):
+            original_filename = "audio_file.mp3"
+
+        # 1. Remove null bytes and path separators
+        clean_input = original_filename.replace("\x00", "").replace("\\", "/")
+        basename = os.path.basename(clean_input)
         name, ext = os.path.splitext(basename)
-        sanitized_name = re.sub(r"[^a-zA-Z0-9_\-]", "_", name)
-        sanitized_filename = f"{sanitized_name}{ext.lower()}"
+
+        # 2. Restrict extension & sanitize filename characters
+        safe_ext = ext[:10].lower() if ext else ".mp3"
+        sanitized_name = re.sub(r"[^a-zA-Z0-9_\-]", "_", name)[:60]
+        if not sanitized_name:
+            sanitized_name = "audio"
+
+        sanitized_filename = f"{sanitized_name}{safe_ext}"
         unique_id = uuid.uuid4().hex
         return f"audio/{unique_id}_{sanitized_filename}"
+
 
     def upload_file(self, local_path: str, storage_key: str, content_type: str) -> str:
         extra_args = {"ContentType": content_type}

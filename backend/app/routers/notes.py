@@ -2,10 +2,11 @@ import os
 import shutil
 import tempfile
 from uuid import UUID
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse, FileResponse
 from sqlalchemy.orm import Session
 
+from app.core.limiter import limiter
 from app.db.session import get_db
 from app.models.audio_note import AudioNote, NoteStatus
 from app.schemas.audio_note import AudioNoteCreateResponse, AudioNoteOut, AudioNoteDetailOut
@@ -18,7 +19,9 @@ storage_service = StorageService()
 
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED, response_model=AudioNoteCreateResponse)
+@limiter.limit("10/minute")
 async def upload_audio_note(
+    request: Request,
     audio: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
@@ -123,7 +126,8 @@ def get_audio_note_playback_url(note_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/{note_id}/retry", status_code=status.HTTP_202_ACCEPTED, response_model=AudioNoteCreateResponse)
-def retry_transcription_route(note_id: UUID, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def retry_transcription_route(request: Request, note_id: UUID, db: Session = Depends(get_db)):
     note = db.query(AudioNote).filter(AudioNote.id == note_id).first()
     if not note:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AudioNote not found")
@@ -145,7 +149,8 @@ def retry_transcription_route(note_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/{note_id}/retry-summary", status_code=status.HTTP_202_ACCEPTED, response_model=AudioNoteCreateResponse)
-def retry_summary_route(note_id: UUID, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def retry_summary_route(request: Request, note_id: UUID, db: Session = Depends(get_db)):
     note = db.query(AudioNote).filter(AudioNote.id == note_id).first()
     if not note:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AudioNote not found")

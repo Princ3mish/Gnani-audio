@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FileAudio, Clock, Calendar, ChevronRight } from 'lucide-react';
 import type { AudioNote } from '../types/note';
 import { StatusBadge } from './StatusBadge';
 
@@ -39,30 +40,33 @@ export const NoteListItem: React.FC<NoteListItemProps> = ({ note }) => {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '16px 20px',
-        backgroundColor: 'rgba(255, 255, 255, 0.03)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '12px',
+        backgroundColor: 'rgba(255, 255, 255, 0.75)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
+        border: '1px solid rgba(124, 111, 224, 0.12)',
+        borderRadius: 'var(--radius-md)',
         marginBottom: '10px',
         cursor: 'pointer',
-        transition: 'all 0.2s ease',
+        boxShadow: '0 2px 8px rgba(124, 111, 224, 0.04)',
       }}
       className="note-item-row"
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: 0 }}>
         <div
           style={{
-            width: '40px',
-            height: '40px',
+            width: '42px',
+            height: '42px',
             borderRadius: '10px',
-            backgroundColor: 'rgba(99, 102, 241, 0.12)',
+            background: 'linear-gradient(135deg, rgba(124, 111, 224, 0.12) 0%, rgba(236, 72, 153, 0.12) 100%)',
+            border: '1px solid rgba(124, 111, 224, 0.2)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '1.2rem',
+            color: 'var(--primary)',
             flexShrink: 0,
           }}
         >
-          🎵
+          <FileAudio size={20} strokeWidth={2.2} />
         </div>
         <div style={{ minWidth: 0 }}>
           <h4
@@ -70,7 +74,7 @@ export const NoteListItem: React.FC<NoteListItemProps> = ({ note }) => {
               margin: 0,
               fontSize: '1rem',
               fontWeight: 600,
-              color: '#f3f4f6',
+              color: 'var(--text-main)',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -82,21 +86,28 @@ export const NoteListItem: React.FC<NoteListItemProps> = ({ note }) => {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '12px',
-              marginTop: '4px',
+              gap: '14px',
+              marginTop: '5px',
               fontSize: '0.825rem',
-              color: '#9ca3af',
+              color: 'var(--text-muted)',
             }}
           >
-            <span>⏱️ {formatDuration(note.duration_seconds)}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Clock size={13} strokeWidth={2} style={{ color: 'var(--primary)' }} />
+              {formatDuration(note.duration_seconds)}
+            </span>
             <span>•</span>
-            <span>📅 {formatDate(note.created_at)}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Calendar size={13} strokeWidth={2} style={{ color: 'var(--secondary-pink)' }} />
+              {formatDate(note.created_at)}
+            </span>
           </div>
         </div>
       </div>
 
-      <div style={{ flexShrink: 0, marginLeft: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0, marginLeft: '16px' }}>
         <StatusBadge status={note.status} />
+        <ChevronRight size={18} style={{ color: 'var(--text-subtle)' }} />
       </div>
     </div>
   );

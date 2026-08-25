@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { Mic } from 'lucide-react';
 import UploadPage from './pages/UploadPage';
 import NoteDetailPage from './pages/NoteDetailPage';
 
@@ -8,7 +9,9 @@ function App() {
       <div className="app-container">
         <header className="app-header">
           <Link to="/" className="app-brand">
-            <span className="brand-icon">🎙️</span>
+            <div className="brand-icon-wrapper">
+              <Mic size={20} strokeWidth={2.5} />
+            </div>
             <span className="brand-text">Gnani Audio Notes</span>
           </Link>
           <nav className="app-nav">

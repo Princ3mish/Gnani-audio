@@ -1,4 +1,5 @@
 import React, { useState, useRef, type DragEvent, type ChangeEvent } from 'react';
+import { UploadCloud, AlertTriangle } from 'lucide-react';
 import { uploadAudioNote } from '../api/notes';
 import { ApiError } from '../api/client';
 
@@ -66,11 +67,6 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({ onSuccess }) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      handleFile(file);
-    }
   };
 
   const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -81,23 +77,25 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({ onSuccess }) => {
   };
 
   return (
-    <div style={{ marginBottom: '2rem' }}>
+    <div style={{ marginBottom: '2.5rem' }}>
       <div
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
         onClick={() => !isUploading && fileInputRef.current?.click()}
         style={{
-          border: `2px dashed ${isDragging ? '#6366f1' : 'rgba(255, 255, 255, 0.15)'}`,
-          borderRadius: '16px',
-          padding: '2.5rem 1.5rem',
+          border: `2px dashed ${isDragging ? 'var(--primary)' : 'rgba(124, 111, 224, 0.3)'}`,
+          borderRadius: 'var(--radius-xl)',
+          padding: '2.75rem 1.5rem',
           textAlign: 'center',
-          backgroundColor: isDragging ? 'rgba(99, 102, 241, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+          backgroundColor: isDragging ? 'rgba(124, 111, 224, 0.08)' : 'rgba(255, 255, 255, 0.75)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
           cursor: isUploading ? 'not-allowed' : 'pointer',
-          transition: 'all 0.2s ease-in-out',
+          transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
           position: 'relative',
           overflow: 'hidden',
-          backdropFilter: 'blur(8px)',
+          boxShadow: isDragging ? 'var(--shadow-glow)' : 'var(--shadow-soft)',
         }}
       >
         <input
@@ -113,18 +111,22 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({ onSuccess }) => {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
             <div
               style={{
-                width: '40px',
-                height: '40px',
-                border: '3px solid rgba(99, 102, 241, 0.2)',
-                borderTopColor: '#6366f1',
+                width: '42px',
+                height: '42px',
+                border: '3px solid rgba(124, 111, 224, 0.2)',
+                borderTopColor: 'var(--primary)',
                 borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }}
             />
             <div>
-              <p style={{ margin: 0, fontWeight: 600, color: '#f3f4f6' }}>Uploading audio note...</p>
+              <p style={{ margin: 0, fontWeight: 700, color: 'var(--text-main)', fontSize: '1.05rem' }}>
+                Uploading audio note...
+              </p>
               {selectedFileName && (
-                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#9ca3af' }}>{selectedFileName}</p>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                  {selectedFileName}
+                </p>
               )}
             </div>
           </div>
@@ -132,24 +134,29 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({ onSuccess }) => {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
             <div
               style={{
-                width: '56px',
-                height: '56px',
-                borderRadius: '14px',
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2))',
+                width: '60px',
+                height: '60px',
+                borderRadius: '16px',
+                background: 'linear-gradient(135deg, rgba(124, 111, 224, 0.12) 0%, rgba(236, 72, 153, 0.15) 100%)',
+                border: '1px solid rgba(124, 111, 224, 0.2)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '1.75rem',
+                color: 'var(--primary)',
                 marginBottom: '4px',
+                boxShadow: '0 4px 12px rgba(124, 111, 224, 0.1)',
               }}
             >
-              🎙️
+              <UploadCloud size={30} strokeWidth={2} />
             </div>
             <div>
-              <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#f9fafb' }}>
-                Drag & drop your audio file here, or <span style={{ color: '#818cf8', textDecoration: 'underline' }}>browse</span>
+              <p style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                Drag & drop your audio file here, or{' '}
+                <span style={{ color: 'var(--primary)', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+                  browse
+                </span>
               </p>
-              <p style={{ margin: '6px 0 0 0', fontSize: '0.875rem', color: '#9ca3af' }}>
+              <p style={{ margin: '6px 0 0 0', fontSize: '0.875rem', color: 'var(--text-muted)', fontWeight: 500 }}>
                 Supports MP3, WAV, M4A (Minimum 2 minutes duration, max 100 MB)
               </p>
             </div>
@@ -160,32 +167,29 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({ onSuccess }) => {
       {error && (
         <div
           style={{
-            marginTop: '1rem',
-            padding: '12px 16px',
-            borderRadius: '10px',
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            color: '#f87171',
+            marginTop: '1.25rem',
+            padding: '14px 18px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--status-failed-bg)',
+            border: '1px solid var(--status-failed-border)',
+            color: 'var(--status-failed-text)',
             fontSize: '0.9rem',
             display: 'flex',
             alignItems: 'flex-start',
-            gap: '10px',
+            gap: '12px',
+            boxShadow: '0 2px 8px rgba(225, 29, 72, 0.08)',
+            animation: 'slideUp 0.25s ease',
           }}
         >
-          <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>⚠️</span>
+          <AlertTriangle size={18} strokeWidth={2.5} style={{ flexShrink: 0, marginTop: '2px' }} />
           <div>
-            <strong style={{ color: '#ef4444', textTransform: 'lowercase' }}>{error.code}:</strong>{' '}
-            {error.message}
+            <strong style={{ color: 'var(--status-failed-text)', textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '0.04em' }}>
+              {error.code}:
+            </strong>{' '}
+            <span>{error.message}</span>
           </div>
         </div>
       )}
-
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 };

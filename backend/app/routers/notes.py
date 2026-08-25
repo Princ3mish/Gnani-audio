@@ -67,7 +67,15 @@ async def upload_audio_note(
         db.commit()
         db.refresh(note)
 
+        # Enqueue background transcription job
+        from app.queues.queue_service import QueueService
+        try:
+            QueueService.enqueue_transcription(note.id, db=db)
+        except Exception as q_err:
+            print(f"Warning: Failed to enqueue transcription for note {note.id}: {q_err}")
+
         return AudioNoteCreateResponse(id=note.id, status=note.status.value)
+
 
     except AudioValidationError as err:
         return JSONResponse(

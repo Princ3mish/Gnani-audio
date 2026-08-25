@@ -36,3 +36,18 @@ class StorageService:
             ExtraArgs=extra_args,
         )
         return storage_key
+
+    def download_file(self, storage_key: str, local_path: str) -> None:
+        self.s3_client.download_file(
+            Bucket=self.bucket_name,
+            Key=storage_key,
+            Filename=local_path,
+        )
+
+    def get_file_bytes(self, storage_key: str) -> bytes:
+        response = self.s3_client.get_object(
+            Bucket=self.bucket_name,
+            Key=storage_key,
+        )
+        return response["Body"].read()
+

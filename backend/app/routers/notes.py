@@ -1,15 +1,16 @@
 import os
 import shutil
 import tempfile
-from fastapi import APIRouter, Depends, File, UploadFile, status
-from fastapi.responses import JSONResponse
+from uuid import UUID
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import JSONResponse, FileResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.audio_note import AudioNote, NoteStatus
-from app.schemas.audio_note import AudioNoteCreateResponse, AudioNoteOut
+from app.schemas.audio_note import AudioNoteCreateResponse, AudioNoteOut, AudioNoteDetailOut
 from app.services.audio_validation_service import AudioValidationService, AudioValidationError
-from app.services.storage_service import StorageService
+from app.services.storage_service import StorageService, LOCAL_STORAGE_DIR
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 storage_service = StorageService()
@@ -50,7 +51,6 @@ async def upload_audio_note(
         duration = AudioValidationService.get_duration_seconds(temp_path)
         AudioValidationService.validate_duration(duration, min_seconds=1)
 
-
         # Upload to S3-compatible storage
         storage_key = storage_service.generate_unique_storage_key(filename)
         storage_service.upload_file(temp_path, storage_key, content_type)
@@ -77,7 +77,6 @@ async def upload_audio_note(
 
         return AudioNoteCreateResponse(id=note.id, status=note.status.value)
 
-
     except AudioValidationError as err:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -95,3 +94,29 @@ async def upload_audio_note(
 def list_audio_notes(db: Session = Depends(get_db)):
     notes = db.query(AudioNote).order_by(AudioNote.created_at.desc()).all()
     return notes
+
+
+@router.get("/stream-file/{storage_key:path}")
+def stream_local_file(storage_key: str):
+    file_path = LOCAL_STORAGE_DIR / storage_key
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Audio file not found on storage disk.")
+    return FileResponse(path=file_path, media_type="audio/mpeg")
+
+
+@router.get("/{note_id}", response_model=AudioNoteDetailOut)
+def get_audio_note_detail(note_id: UUID, db: Session = Depends(get_db)):
+    note = db.query(AudioNote).filter(AudioNote.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AudioNote not found")
+    return note
+
+
+@router.get("/{note_id}/audio")
+def get_audio_note_playback_url(note_id: UUID, db: Session = Depends(get_db)):
+    note = db.query(AudioNote).filter(AudioNote.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AudioNote not found")
+    
+    url = storage_service.generate_presigned_url(note.storage_key, expires_in_seconds=900)
+    return {"url": url}

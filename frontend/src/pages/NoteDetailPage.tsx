@@ -1,33 +1,79 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import type { AudioNote } from '../types/note';
-import { getNote } from '../api/notes';
+import type { AudioNoteDetail, NoteStatus } from '../types/note';
+import { getNoteDetail, getAudioUrl } from '../api/notes';
 import { StatusBadge } from '../components/StatusBadge';
+
+const STAGES: { id: NoteStatus; label: string; icon: string }[] = [
+  { id: 'UPLOADING', label: 'Uploading', icon: '📤' },
+  { id: 'QUEUED', label: 'Queued', icon: '⏳' },
+  { id: 'TRANSCRIBING', label: 'Transcribing', icon: '🎙️' },
+  { id: 'SUMMARIZING', label: 'Summarizing', icon: '🤖' },
+  { id: 'COMPLETED', label: 'Completed', icon: '✅' },
+];
 
 export const NoteDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const [note, setNote] = useState<AudioNote | null>(null);
+  const [note, setNote] = useState<AudioNoteDetail | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const isPollingRef = useRef<boolean>(false);
+
+  const fetchDetail = useCallback(async (noteId: string) => {
+    try {
+      const data = await getNoteDetail(noteId);
+      setNote(data);
+      setError(null);
+      return data;
+    } catch (err: any) {
+      console.error('Failed to fetch note detail:', err);
+      setError(err?.message || 'Failed to load note details');
+      return null;
+    }
+  }, []);
+
+  // Fetch audio playback URL when completed
+  useEffect(() => {
+    if (note && note.status === 'COMPLETED' && !audioUrl && id) {
+      getAudioUrl(id)
+        .then((res) => setAudioUrl(res.url))
+        .catch((err) => console.warn('Failed to load audio playback URL:', err));
+    }
+  }, [note, audioUrl, id]);
+
+  // Initial fetch and Polling effect
   useEffect(() => {
     if (!id) return;
 
-    setLoading(true);
-    setError(null);
+    let timer: ReturnType<typeof setInterval> | null = null;
 
-    getNote(id)
-      .then((data) => {
-        setNote(data);
-      })
-      .catch((err) => {
-        console.warn('Note detail call notice:', err);
-        setError('Note details endpoint not fully available yet on backend.');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [id]);
+    isPollingRef.current = true;
+
+    setLoading(true);
+    fetchDetail(id).then((initialNote) => {
+      setLoading(false);
+
+      if (!initialNote) return;
+
+      const shouldPoll = ['QUEUED', 'TRANSCRIBING', 'SUMMARIZING'].includes(initialNote.status);
+      if (shouldPoll) {
+        timer = setInterval(async () => {
+          if (!isPollingRef.current) return;
+          const updated = await fetchDetail(id);
+          if (updated && !['QUEUED', 'TRANSCRIBING', 'SUMMARIZING'].includes(updated.status)) {
+            if (timer) clearInterval(timer);
+          }
+        }, 2500);
+      }
+    });
+
+    return () => {
+      isPollingRef.current = false;
+      if (timer) clearInterval(timer);
+    };
+  }, [id, fetchDetail]);
 
   const formatDuration = (seconds: number | null): string => {
     if (seconds == null || isNaN(seconds)) return '--:--';
@@ -48,8 +94,30 @@ export const NoteDetailPage: React.FC = () => {
     }
   };
 
+  const getActiveStageIndex = (status: NoteStatus): number => {
+    switch (status) {
+      case 'UPLOADING':
+        return 0;
+      case 'QUEUED':
+        return 1;
+      case 'TRANSCRIBING':
+        return 2;
+      case 'SUMMARIZING':
+        return 3;
+      case 'COMPLETED':
+        return 4;
+      case 'FAILED':
+        return -1;
+      default:
+        return 0;
+    }
+  };
+
+  const activeIndex = note ? getActiveStageIndex(note.status) : 0;
+  const isProcessing = note && ['QUEUED', 'TRANSCRIBING', 'SUMMARIZING'].includes(note.status);
+
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '1rem 0' }}>
+    <div style={{ maxWidth: '840px', margin: '0 auto', padding: '1.5rem 0' }}>
       <div style={{ marginBottom: '1.5rem' }}>
         <Link
           to="/"
@@ -63,22 +131,22 @@ export const NoteDetailPage: React.FC = () => {
             fontWeight: 500,
           }}
         >
-          ← Back to Notes
+          ← Back to Notes List
         </Link>
       </div>
 
       {loading ? (
-        <div style={{ padding: '3rem 0', textAlign: 'center' }}>
+        <div style={{ padding: '4rem 0', textAlign: 'center' }}>
           <div
             style={{
               display: 'inline-block',
-              width: '36px',
-              height: '36px',
+              width: '40px',
+              height: '40px',
               border: '3px solid rgba(99, 102, 241, 0.2)',
               borderTopColor: '#6366f1',
               borderRadius: '50%',
               animation: 'spin 0.8s linear infinite',
-              marginBottom: '12px',
+              marginBottom: '14px',
             }}
           />
           <p style={{ color: '#9ca3af', margin: 0 }}>Loading note details...</p>
@@ -93,70 +161,308 @@ export const NoteDetailPage: React.FC = () => {
               border: '1px solid rgba(255, 255, 255, 0.08)',
               borderRadius: '16px',
               marginBottom: '1.5rem',
+              backdropFilter: 'blur(12px)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
               <div>
-                <h1 style={{ margin: '0 0 10px 0', fontSize: '1.6rem', fontWeight: 700, color: '#f9fafb' }}>
+                <h1 style={{ margin: '0 0 10px 0', fontSize: '1.65rem', fontWeight: 700, color: '#f9fafb' }}>
                   {note.filename}
                 </h1>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', color: '#9ca3af', fontSize: '0.9rem' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '16px', color: '#9ca3af', fontSize: '0.9rem' }}>
                   <span>⏱️ Duration: {formatDuration(note.duration_seconds)}</span>
                   <span>•</span>
                   <span>📅 Created: {formatDate(note.created_at)}</span>
+                  {isProcessing && (
+                    <>
+                      <span>•</span>
+                      <span style={{ color: '#818cf8', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <span className="pulsing-dot" /> Live processing...
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
               <StatusBadge status={note.status} />
             </div>
+
+            {/* 5-Stage Horizontal Progress Indicator */}
+            <div style={{ marginTop: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
+                {/* Connecting Progress Line */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '18px',
+                    left: '5%',
+                    right: '5%',
+                    height: '3px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    zIndex: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      backgroundColor: note.status === 'FAILED' ? '#ef4444' : '#6366f1',
+                      width: note.status === 'FAILED' ? '100%' : `${(Math.max(0, activeIndex) / (STAGES.length - 1)) * 100}%`,
+                      transition: 'width 0.4s ease-in-out',
+                    }}
+                  />
+                </div>
+
+                {STAGES.map((stage, idx) => {
+                  const isCompleted = activeIndex > idx || note.status === 'COMPLETED';
+                  const isCurrent = activeIndex === idx && note.status !== 'FAILED';
+                  const isFailed = note.status === 'FAILED';
+
+                  let circleBg = 'rgba(31, 41, 55, 0.9)';
+                  let circleBorder = '1px solid rgba(255, 255, 255, 0.2)';
+                  let labelColor = '#6b7280';
+
+                  if (isFailed) {
+                    circleBg = 'rgba(239, 68, 68, 0.2)';
+                    circleBorder = '2px solid #ef4444';
+                    labelColor = '#f87171';
+                  } else if (isCurrent) {
+                    circleBg = 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)';
+                    circleBorder = '2px solid #818cf8';
+                    labelColor = '#f3f4f6';
+                  } else if (isCompleted) {
+                    circleBg = '#312e81';
+                    circleBorder = '2px solid #6366f1';
+                    labelColor = '#c7d2fe';
+                  }
+
+                  return (
+                    <div
+                      key={stage.id}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        zIndex: 1,
+                        width: '70px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '50%',
+                          background: circleBg,
+                          border: circleBorder,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.9rem',
+                          boxShadow: isCurrent ? '0 0 12px rgba(99, 102, 241, 0.5)' : 'none',
+                          transition: 'all 0.3s ease',
+                        }}
+                      >
+                        {stage.icon}
+                      </div>
+                      <span
+                        style={{
+                          marginTop: '8px',
+                          fontSize: '0.75rem',
+                          fontWeight: isCurrent ? 600 : 400,
+                          color: labelColor,
+                          textAlign: 'center',
+                        }}
+                      >
+                        {stage.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
-          {/* Placeholders for Player, Transcript, and Summary (Section 8) */}
-          <div style={{ display: 'grid', gap: '1.5rem' }}>
-            {/* Audio Player Placeholder */}
+          {/* FAILED ERROR BANNER */}
+          {note.status === 'FAILED' && (
             <div
               style={{
                 padding: '1.5rem',
-                backgroundColor: 'rgba(255, 255, 255, 0.02)',
-                border: '1px dashed rgba(255, 255, 255, 0.1)',
-                borderRadius: '12px',
+                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: '16px',
+                marginBottom: '1.5rem',
               }}
             >
-              <h3 style={{ margin: '0 0 8px 0', fontSize: '1rem', color: '#e5e7eb' }}>🎵 Audio Playback</h3>
-              <p style={{ margin: 0, fontSize: '0.875rem', color: '#6b7280' }}>
-                Audio player controls will be rendered here upon transcription pipeline integration.
-              </p>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <span style={{ fontSize: '1.5rem' }}>⚠️</span>
+                <div>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1.05rem', color: '#f87171', fontWeight: 600 }}>
+                    Processing Failed
+                  </h3>
+                  {note.error_code && (
+                    <p style={{ margin: '0 0 6px 0', fontSize: '0.8rem', color: '#ef4444', fontFamily: 'monospace' }}>
+                      Error Code: {note.error_code}
+                    </p>
+                  )}
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#fca5a5' }}>
+                    {note.error_message || 'An error occurred during audio processing.'}
+                  </p>
+                </div>
+              </div>
             </div>
+          )}
 
-            {/* Transcript Placeholder */}
+          {/* PROCESSING BANNER */}
+          {isProcessing && (
             <div
               style={{
-                padding: '1.5rem',
-                backgroundColor: 'rgba(255, 255, 255, 0.02)',
-                border: '1px dashed rgba(255, 255, 255, 0.1)',
-                borderRadius: '12px',
+                padding: '1.25rem 1.5rem',
+                backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                border: '1px solid rgba(99, 102, 241, 0.2)',
+                borderRadius: '16px',
+                marginBottom: '1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '14px',
               }}
             >
-              <h3 style={{ margin: '0 0 8px 0', fontSize: '1rem', color: '#e5e7eb' }}>📝 Transcript</h3>
-              <p style={{ margin: 0, fontSize: '0.875rem', color: '#6b7280' }}>
-                Transcript text placeholder — pending background processing worker completion.
-              </p>
+              <div
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  border: '2px solid rgba(129, 140, 248, 0.3)',
+                  borderTopColor: '#818cf8',
+                  borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite',
+                }}
+              />
+              <div>
+                <h4 style={{ margin: '0 0 2px 0', fontSize: '0.95rem', color: '#c7d2fe' }}>
+                  Processing in Progress...
+                </h4>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: '#9ca3af' }}>
+                  Live status is updating automatically ({note.status.toLowerCase()}).
+                </p>
+              </div>
             </div>
+          )}
 
-            {/* Summary Placeholder */}
-            <div
-              style={{
-                padding: '1.5rem',
-                backgroundColor: 'rgba(255, 255, 255, 0.02)',
-                border: '1px dashed rgba(255, 255, 255, 0.1)',
-                borderRadius: '12px',
-              }}
-            >
-              <h3 style={{ margin: '0 0 8px 0', fontSize: '1rem', color: '#e5e7eb' }}>✨ AI Summary</h3>
-              <p style={{ margin: 0, fontSize: '0.875rem', color: '#6b7280' }}>
-                AI-generated executive summary and key action items will appear here.
-              </p>
+          {/* CONTENT SECTION (WHEN COMPLETED) */}
+          {note.status === 'COMPLETED' && (
+            <div style={{ display: 'grid', gap: '1.5rem' }}>
+              {/* Audio Playback Player */}
+              <div
+                style={{
+                  padding: '1.5rem',
+                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '16px',
+                }}
+              >
+                <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1rem', color: '#f3f4f6', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  🎵 Audio Playback
+                </h3>
+                {audioUrl ? (
+                  <audio
+                    controls
+                    src={audioUrl}
+                    style={{
+                      width: '100%',
+                      borderRadius: '8px',
+                      outline: 'none',
+                    }}
+                  />
+                ) : (
+                  <p style={{ margin: 0, color: '#9ca3af', fontSize: '0.875rem' }}>Loading playback audio link...</p>
+                )}
+              </div>
+
+              {/* AI Summary Block */}
+              {note.summary && (
+                <div
+                  style={{
+                    padding: '1.75rem',
+                    backgroundColor: 'rgba(99, 102, 241, 0.04)',
+                    border: '1px solid rgba(99, 102, 241, 0.15)',
+                    borderRadius: '16px',
+                  }}
+                >
+                  <h3 style={{ margin: '0 0 14px 0', fontSize: '1.2rem', color: '#818cf8', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    ✨ AI Executive Summary
+                  </h3>
+
+                  {/* Summary Text */}
+                  <p style={{ margin: '0 0 1.5rem 0', color: '#e0e7ff', fontSize: '1rem', lineHeight: '1.6' }}>
+                    {note.summary.summary}
+                  </p>
+
+                  {/* Key Points */}
+                  {note.summary.key_points && note.summary.key_points.length > 0 && (
+                    <div style={{ marginBottom: '1.5rem' }}>
+                      <h4 style={{ margin: '0 0 10px 0', fontSize: '0.95rem', color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        📌 Key Discussion Points
+                      </h4>
+                      <ul style={{ margin: 0, paddingLeft: '1.2rem', display: 'grid', gap: '6px' }}>
+                        {note.summary.key_points.map((pt, i) => (
+                          <li key={i} style={{ color: '#d1d5db', fontSize: '0.925rem', lineHeight: '1.5' }}>
+                            {pt}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Action Items */}
+                  {note.summary.action_items && note.summary.action_items.length > 0 && (
+                    <div>
+                      <h4 style={{ margin: '0 0 10px 0', fontSize: '0.95rem', color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        ✅ Action Items
+                      </h4>
+                      <ul style={{ margin: 0, paddingLeft: '1.2rem', display: 'grid', gap: '6px' }}>
+                        {note.summary.action_items.map((item, i) => (
+                          <li key={i} style={{ color: '#d1d5db', fontSize: '0.925rem', lineHeight: '1.5' }}>
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Full Transcript Block */}
+              <div
+                style={{
+                  padding: '1.75rem',
+                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '16px',
+                }}
+              >
+                <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1rem', color: '#f3f4f6', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  📝 Full Speech Transcript
+                </h3>
+                {note.transcript ? (
+                  <div
+                    style={{
+                      padding: '1.25rem',
+                      backgroundColor: 'rgba(0, 0, 0, 0.25)',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(255, 255, 255, 0.05)',
+                      color: '#d1d5db',
+                      fontSize: '0.95rem',
+                      lineHeight: '1.6',
+                      maxHeight: '300px',
+                      overflowY: 'auto',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {note.transcript}
+                  </div>
+                ) : (
+                  <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem' }}>No transcript available.</p>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       ) : (
         <div
@@ -169,9 +475,9 @@ export const NoteDetailPage: React.FC = () => {
           }}
         >
           <div style={{ fontSize: '2rem', marginBottom: '8px' }}>ℹ️</div>
-          <h3 style={{ margin: '0 0 8px 0', color: '#f3f4f6' }}>Note ID: {id}</h3>
+          <h3 style={{ margin: '0 0 8px 0', color: '#f3f4f6' }}>Note Not Found</h3>
           <p style={{ margin: '0 0 16px 0', color: '#9ca3af', fontSize: '0.9rem' }}>
-            {error || 'Single note details API endpoint not available yet.'}
+            {error || `Audio note with ID '${id}' could not be located.`}
           </p>
           <Link
             to="/"

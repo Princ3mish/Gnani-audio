@@ -1,3 +1,13 @@
-from app.schemas.audio_note import AudioNoteCreateResponse, AudioNoteOut
+from app.schemas.audio_note import (
+    AudioNoteCreateResponse,
+    AudioNoteOut,
+    SummaryDetail,
+    AudioNoteDetailOut,
+)
 
-__all__ = ["AudioNoteCreateResponse", "AudioNoteOut"]
+__all__ = [
+    "AudioNoteCreateResponse",
+    "AudioNoteOut",
+    "SummaryDetail",
+    "AudioNoteDetailOut",
+]

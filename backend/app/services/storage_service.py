@@ -82,3 +82,16 @@ class StorageService:
             if target_path.exists():
                 return target_path.read_bytes()
             raise FileNotFoundError(f"Storage key {storage_key} not found in S3 or local disk.") from exc
+
+    def generate_presigned_url(self, storage_key: str, expires_in_seconds: int = 900) -> str:
+        try:
+            url = self.s3_client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": self.bucket_name, "Key": storage_key},
+                ExpiresIn=expires_in_seconds,
+            )
+            return url
+        except Exception as exc:
+            print(f"Presigned URL generation fallback for key ({storage_key}): {exc}")
+            return f"http://localhost:8000/api/notes/stream-file/{storage_key}"
+

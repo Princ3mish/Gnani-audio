@@ -35,6 +35,18 @@ class Settings(BaseSettings):
                 user, _, password = userinfo.partition(":")
                 password = urllib.parse.unquote(password)
                 password = urllib.parse.quote(password, safe="*")
+
+                # Map Supabase direct domain (IPv6 only) to IPv4 Pooler for cloud environments (like Render)
+                if "supabase.co" in hostpath and ".pooler.supabase.com" not in hostpath:
+                    # Match db.<project_ref>.supabase.co
+                    import re
+                    match = re.search(r"db\.([a-zA-Z0-9]+)\.supabase\.co", hostpath)
+                    if match:
+                        ref = match.group(1)
+                        hostpath = re.sub(r"db\.[a-zA-Z0-9]+\.supabase\.co", "aws-0-ap-northeast-1.pooler.supabase.com", hostpath)
+                        if not user.startswith("postgres."):
+                            user = f"postgres.{ref}"
+
                 v = f"{prefix}://{user}:{password}@{hostpath}"
         return v
 

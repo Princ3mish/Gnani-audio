@@ -56,3 +56,17 @@ export async function apiPostMultipart<T>(path: string, formData: FormData): Pro
   });
   return handleResponse<T>(response);
 }
+
+export async function apiPost<T>(path: string, body?: any): Promise<T> {
+  const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return handleResponse<T>(response);
+}
+

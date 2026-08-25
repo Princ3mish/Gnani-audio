@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import type { AudioNoteDetail, NoteStatus } from '../types/note';
-import { getNoteDetail, getAudioUrl } from '../api/notes';
+import { getNoteDetail, getAudioUrl, retryTranscription, retrySummary } from '../api/notes';
 import { StatusBadge } from '../components/StatusBadge';
 
 const STAGES: { id: NoteStatus; label: string; icon: string }[] = [
@@ -18,8 +18,11 @@ export const NoteDetailPage: React.FC = () => {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
 
   const isPollingRef = useRef<boolean>(false);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchDetail = useCallback(async (noteId: string) => {
     try {
@@ -34,6 +37,27 @@ export const NoteDetailPage: React.FC = () => {
     }
   }, []);
 
+  const stopPolling = useCallback(() => {
+    isPollingRef.current = false;
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
+
+  const startPolling = useCallback((noteId: string) => {
+    stopPolling();
+    isPollingRef.current = true;
+
+    pollTimerRef.current = setInterval(async () => {
+      if (!isPollingRef.current) return;
+      const updated = await fetchDetail(noteId);
+      if (updated && !['QUEUED', 'TRANSCRIBING', 'SUMMARIZING'].includes(updated.status)) {
+        stopPolling();
+      }
+    }, 2500);
+  }, [fetchDetail, stopPolling]);
+
   // Fetch audio playback URL when completed
   useEffect(() => {
     if (note && note.status === 'COMPLETED' && !audioUrl && id) {
@@ -47,10 +71,6 @@ export const NoteDetailPage: React.FC = () => {
   useEffect(() => {
     if (!id) return;
 
-    let timer: ReturnType<typeof setInterval> | null = null;
-
-    isPollingRef.current = true;
-
     setLoading(true);
     fetchDetail(id).then((initialNote) => {
       setLoading(false);
@@ -59,21 +79,51 @@ export const NoteDetailPage: React.FC = () => {
 
       const shouldPoll = ['QUEUED', 'TRANSCRIBING', 'SUMMARIZING'].includes(initialNote.status);
       if (shouldPoll) {
-        timer = setInterval(async () => {
-          if (!isPollingRef.current) return;
-          const updated = await fetchDetail(id);
-          if (updated && !['QUEUED', 'TRANSCRIBING', 'SUMMARIZING'].includes(updated.status)) {
-            if (timer) clearInterval(timer);
-          }
-        }, 2500);
+        startPolling(id);
       }
     });
 
     return () => {
-      isPollingRef.current = false;
-      if (timer) clearInterval(timer);
+      stopPolling();
     };
-  }, [id, fetchDetail]);
+  }, [id, fetchDetail, startPolling, stopPolling]);
+
+  const handleRetry = async () => {
+    if (!id || !note) return;
+    setRetrying(true);
+    setRetryError(null);
+
+    const hasTranscript = Boolean(note.transcript && note.transcript.trim().length > 0);
+
+    try {
+      if (hasTranscript) {
+        await retrySummary(id);
+      } else {
+        await retryTranscription(id);
+      }
+
+      const newStatus: NoteStatus = hasTranscript ? 'SUMMARIZING' : 'QUEUED';
+      setNote((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: newStatus,
+              error_code: null,
+              error_message: null,
+            }
+          : null
+      );
+
+      // Immediately refetch and start polling loop
+      await fetchDetail(id);
+      startPolling(id);
+    } catch (err: any) {
+      console.error('Retry error:', err);
+      setRetryError(err?.message || 'Failed to trigger retry operation.');
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   const formatDuration = (seconds: number | null): string => {
     if (seconds == null || isNaN(seconds)) return '--:--';
@@ -115,6 +165,8 @@ export const NoteDetailPage: React.FC = () => {
 
   const activeIndex = note ? getActiveStageIndex(note.status) : 0;
   const isProcessing = note && ['QUEUED', 'TRANSCRIBING', 'SUMMARIZING'].includes(note.status);
+  const hasTranscript = note ? Boolean(note.transcript && note.transcript.trim().length > 0) : false;
+  const retryBtnLabel = hasTranscript ? 'Retry Summarization' : 'Retry Transcription';
 
   return (
     <div style={{ maxWidth: '840px', margin: '0 auto', padding: '1.5rem 0' }}>
@@ -280,7 +332,7 @@ export const NoteDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* FAILED ERROR BANNER */}
+          {/* FAILED ERROR BANNER WITH RETRY BUTTON */}
           {note.status === 'FAILED' && (
             <div
               style={{
@@ -291,9 +343,9 @@ export const NoteDetailPage: React.FC = () => {
                 marginBottom: '1.5rem',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                <span style={{ fontSize: '1.5rem' }}>⚠️</span>
-                <div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                <span style={{ fontSize: '1.6rem' }}>⚠️</span>
+                <div style={{ flex: 1 }}>
                   <h3 style={{ margin: '0 0 4px 0', fontSize: '1.05rem', color: '#f87171', fontWeight: 600 }}>
                     Processing Failed
                   </h3>
@@ -302,9 +354,60 @@ export const NoteDetailPage: React.FC = () => {
                       Error Code: {note.error_code}
                     </p>
                   )}
-                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#fca5a5' }}>
+                  <p style={{ margin: '0 0 14px 0', fontSize: '0.9rem', color: '#fca5a5' }}>
                     {note.error_message || 'An error occurred during audio processing.'}
                   </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <button
+                      onClick={handleRetry}
+                      disabled={retrying}
+                      style={{
+                        alignSelf: 'flex-start',
+                        padding: '8px 18px',
+                        backgroundColor: '#ef4444',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                        cursor: retrying ? 'not-allowed' : 'pointer',
+                        opacity: retrying ? 0.7 : 1,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      {retrying ? (
+                        <>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              width: '14px',
+                              height: '14px',
+                              border: '2px solid rgba(255, 255, 255, 0.3)',
+                              borderTopColor: '#ffffff',
+                              borderRadius: '50%',
+                              animation: 'spin 0.8s linear infinite',
+                            }}
+                          />
+                          Triggering Retry...
+                        </>
+                      ) : (
+                        <>
+                          🔄 {retryBtnLabel}
+                        </>
+                      )}
+                    </button>
+
+                    {retryError && (
+                      <div style={{ color: '#fca5a5', fontSize: '0.85rem', marginTop: '4px' }}>
+                        ⚠️ {retryError}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -345,35 +448,37 @@ export const NoteDetailPage: React.FC = () => {
             </div>
           )}
 
-          {/* CONTENT SECTION (WHEN COMPLETED) */}
-          {note.status === 'COMPLETED' && (
+          {/* CONTENT SECTION (WHEN COMPLETED OR IF TRANSCRIPT EXISTS) */}
+          {(note.status === 'COMPLETED' || hasTranscript) && (
             <div style={{ display: 'grid', gap: '1.5rem' }}>
               {/* Audio Playback Player */}
-              <div
-                style={{
-                  padding: '1.5rem',
-                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: '16px',
-                }}
-              >
-                <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1rem', color: '#f3f4f6', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  🎵 Audio Playback
-                </h3>
-                {audioUrl ? (
-                  <audio
-                    controls
-                    src={audioUrl}
-                    style={{
-                      width: '100%',
-                      borderRadius: '8px',
-                      outline: 'none',
-                    }}
-                  />
-                ) : (
-                  <p style={{ margin: 0, color: '#9ca3af', fontSize: '0.875rem' }}>Loading playback audio link...</p>
-                )}
-              </div>
+              {note.status === 'COMPLETED' && (
+                <div
+                  style={{
+                    padding: '1.5rem',
+                    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    borderRadius: '16px',
+                  }}
+                >
+                  <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1rem', color: '#f3f4f6', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    🎵 Audio Playback
+                  </h3>
+                  {audioUrl ? (
+                    <audio
+                      controls
+                      src={audioUrl}
+                      style={{
+                        width: '100%',
+                        borderRadius: '8px',
+                        outline: 'none',
+                      }}
+                    />
+                  ) : (
+                    <p style={{ margin: 0, color: '#9ca3af', fontSize: '0.875rem' }}>Loading playback audio link...</p>
+                  )}
+                </div>
+              )}
 
               {/* AI Summary Block */}
               {note.summary && (
@@ -429,18 +534,18 @@ export const NoteDetailPage: React.FC = () => {
               )}
 
               {/* Full Transcript Block */}
-              <div
-                style={{
-                  padding: '1.75rem',
-                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: '16px',
-                }}
-              >
-                <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1rem', color: '#f3f4f6', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  📝 Full Speech Transcript
-                </h3>
-                {note.transcript ? (
+              {hasTranscript && (
+                <div
+                  style={{
+                    padding: '1.75rem',
+                    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    borderRadius: '16px',
+                  }}
+                >
+                  <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1rem', color: '#f3f4f6', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    📝 Full Speech Transcript
+                  </h3>
                   <div
                     style={{
                       padding: '1.25rem',
@@ -457,10 +562,8 @@ export const NoteDetailPage: React.FC = () => {
                   >
                     {note.transcript}
                   </div>
-                ) : (
-                  <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem' }}>No transcript available.</p>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
         </div>

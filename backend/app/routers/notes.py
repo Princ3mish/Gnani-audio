@@ -11,6 +11,7 @@ from app.models.audio_note import AudioNote, NoteStatus
 from app.schemas.audio_note import AudioNoteCreateResponse, AudioNoteOut, AudioNoteDetailOut
 from app.services.audio_validation_service import AudioValidationService, AudioValidationError
 from app.services.storage_service import StorageService, LOCAL_STORAGE_DIR
+from app.queues.queue_service import QueueService, InvalidStateError, DuplicateJobError
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 storage_service = StorageService()
@@ -69,7 +70,6 @@ async def upload_audio_note(
         db.refresh(note)
 
         # Enqueue background transcription job
-        from app.queues.queue_service import QueueService
         try:
             QueueService.enqueue_transcription(note.id, db=db)
         except Exception as q_err:
@@ -120,3 +120,47 @@ def get_audio_note_playback_url(note_id: UUID, db: Session = Depends(get_db)):
     
     url = storage_service.generate_presigned_url(note.storage_key, expires_in_seconds=900)
     return {"url": url}
+
+
+@router.post("/{note_id}/retry", status_code=status.HTTP_202_ACCEPTED, response_model=AudioNoteCreateResponse)
+def retry_transcription_route(note_id: UUID, db: Session = Depends(get_db)):
+    note = db.query(AudioNote).filter(AudioNote.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AudioNote not found")
+
+    try:
+        QueueService.retry_transcription(note_id, db=db)
+        db.refresh(note)
+        return AudioNoteCreateResponse(id=note.id, status=note.status.value)
+    except InvalidStateError as err:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error_code": "INVALID_STATE", "message": str(err)}
+        )
+    except DuplicateJobError as err:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error_code": "DUPLICATE_JOB", "message": str(err)}
+        )
+
+
+@router.post("/{note_id}/retry-summary", status_code=status.HTTP_202_ACCEPTED, response_model=AudioNoteCreateResponse)
+def retry_summary_route(note_id: UUID, db: Session = Depends(get_db)):
+    note = db.query(AudioNote).filter(AudioNote.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AudioNote not found")
+
+    try:
+        QueueService.retry_summary(note_id, db=db)
+        db.refresh(note)
+        return AudioNoteCreateResponse(id=note.id, status=note.status.value)
+    except InvalidStateError as err:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error_code": "INVALID_STATE", "message": str(err)}
+        )
+    except DuplicateJobError as err:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error_code": "DUPLICATE_JOB", "message": str(err)}
+        )

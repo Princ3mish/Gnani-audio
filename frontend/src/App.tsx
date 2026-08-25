@@ -1,23 +1,25 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import NotesList from './pages/NotesList';
-import NoteDetail from './pages/NoteDetail';
-import Architecture from './pages/Architecture';
+import UploadPage from './pages/UploadPage';
+import NoteDetailPage from './pages/NoteDetailPage';
 
 function App() {
   return (
     <Router>
-      <div style={{ fontFamily: 'system-ui, sans-serif', padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-        <nav style={{ marginBottom: '20px', display: 'flex', gap: '15px' }}>
-          <Link to="/" style={{ textDecoration: 'none', color: '#007acc', fontWeight: 'bold' }}>Home (Notes List)</Link>
-          <Link to="/notes/sample-note-id" style={{ textDecoration: 'none', color: '#007acc', fontWeight: 'bold' }}>Sample Note Detail</Link>
-          <Link to="/architecture" style={{ textDecoration: 'none', color: '#007acc', fontWeight: 'bold' }}>Architecture</Link>
-        </nav>
-        <hr style={{ border: 'none', height: '1px', backgroundColor: '#ccc', margin: '20px 0' }} />
-        <main>
+      <div className="app-container">
+        <header className="app-header">
+          <Link to="/" className="app-brand">
+            <span className="brand-icon">🎙️</span>
+            <span className="brand-text">Gnani Audio Notes</span>
+          </Link>
+          <nav className="app-nav">
+            <Link to="/" className="nav-link">Notes Workspace</Link>
+          </nav>
+        </header>
+
+        <main className="app-content">
           <Routes>
-            <Route path="/" element={<NotesList />} />
-            <Route path="/notes/:id" element={<NoteDetail />} />
-            <Route path="/architecture" element={<Architecture />} />
+            <Route path="/" element={<UploadPage />} />
+            <Route path="/notes/:id" element={<NoteDetailPage />} />
           </Routes>
         </main>
       </div>

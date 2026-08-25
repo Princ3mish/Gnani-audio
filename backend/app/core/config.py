@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     LLM_API_KEY: str
     LLM_MODEL: str
     LLM_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
+    MAX_RETRIES: int = 3
+    RETRY_BACKOFF_MAX: int = 300
+
 
 
     model_config = SettingsConfigDict(

@@ -94,8 +94,9 @@ class SummarizationService:
             )
         except openai.AuthenticationError as exc:
             raise LLMAuthError("Authentication with LLM provider failed. Check LLM_API_KEY.") from exc
-        except openai.APITimeoutError as exc:
-            raise LLMTimeoutError(f"LLM request timed out after {self.timeout_seconds}s.") from exc
+        except (openai.APITimeoutError, openai.APIConnectionError) as exc:
+            raise LLMTimeoutError(f"LLM connection or timeout error: {exc}") from exc
+
         except openai.InternalServerError as exc:
             raise LLMServerError(f"LLM provider server error: {exc}") from exc
         except openai.APIError as exc:

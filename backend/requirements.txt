@@ -10,3 +10,4 @@ redis
 boto3
 python-dotenv
 httpx
+mutagen

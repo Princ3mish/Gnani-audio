@@ -12,3 +12,8 @@ python-dotenv
 httpx
 mutagen
 openai
+pydub
+audioop-lts
+
+
+

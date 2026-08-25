@@ -1,5 +1,6 @@
 from app.services.audio_validation_service import AudioValidationService, AudioValidationError
 from app.services.storage_service import StorageService
+from app.services.audio_chunking_service import AudioChunkingService
 from app.services.gnani_service import (
     GnaniService,
     GnaniError,
@@ -23,6 +24,7 @@ __all__ = [
     "AudioValidationService",
     "AudioValidationError",
     "StorageService",
+    "AudioChunkingService",
     "GnaniService",
     "GnaniError",
     "GnaniTimeoutError",
